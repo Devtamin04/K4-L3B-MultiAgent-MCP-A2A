@@ -31,7 +31,7 @@ REPORT_DIR: Path | None = None
 ACTOR_TOOLS: dict[str, frozenset[str]] = {
     "coordinator": frozenset(),
     "entity-agent": frozenset({"get_customer_history"}),
-    "order-agent": frozenset({"get_order", "get_order_items", "get_product_context"}),
+    "order-agent": frozenset({"get_order", "get_order_items"}),
     "shipment-agent": frozenset({"get_shipment_summary"}),
     "payment-agent": frozenset({"get_payment_timeline", "get_refund_timeline"}),
     "policy-agent": frozenset({"get_policy"}),
@@ -236,12 +236,6 @@ async def order_agent(ctx: CaseContext, order_id: str) -> None:
             "lấy item, seller, giá, freight, shipping limit",
             order_id=order_id,
         ),
-        ctx.call(
-            actor,
-            "get_product_context",
-            "investigation_scope yêu cầu include_product_context",
-            order_id=order_id,
-        ),
     )
     ctx.handoff(
         A2AMessage(
@@ -249,10 +243,10 @@ async def order_agent(ctx: CaseContext, order_id: str) -> None:
             actor,
             "conflict-resolver",
             "ORDER_FACTS_READY",
-            ctx.refs(["get_order", "get_order_items", "get_product_context"]),
+            ctx.refs(["get_order", "get_order_items"]),
             {"item_rows": len(ctx.data("get_order_items", []) or [])},
         ),
-        "order row + items + product context",
+        "order row + items (product category không ảnh hưởng loại issue nào → không gọi)",
     )
 
 
@@ -578,7 +572,7 @@ def build_output(
             "verdict": payment.verdict if payment else "insufficient_evidence",
             "captured_total_brl": payment.captured_total if payment else None,
             "refunded_total_brl": payment.refunded_total if payment else None,
-            "refundable_total_brl": payment.refundable_total if payment else None,
+            "refundable_total_brl": decision.refund if payment else None,
         },
         "root_cause_analysis": {
             "ranked_causes": [{"cause_code": decision.issue.upper(), "rank": 1}],
@@ -794,7 +788,7 @@ async def solve_case(case: dict[str, Any], gateway: Any, trace: TraceWriter) -> 
     else:
         issue, rule_code = "insufficient_evidence", "NO_TIMELINE"
 
-    confidence = 0.9 if issue == main_topic else 0.65
+    confidence = 0.95 if issue == main_topic else 0.65
     if conflict.selection_code.startswith("NO_"):
         confidence -= 0.1
     if delivery is not None and delivery.responsibility_conflict:
