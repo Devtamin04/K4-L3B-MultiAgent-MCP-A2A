@@ -34,3 +34,8 @@ dist/*
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Local investigation artifacts
+.cache/
+.scratch/
+reports/

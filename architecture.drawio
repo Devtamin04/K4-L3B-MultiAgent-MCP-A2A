@@ -1,0 +1,140 @@
+<mxfile host="app.diagrams.net" modified="2026-09-25T00:00:00.000Z" agent="claude-code" version="24.0.0" type="device">
+  <diagram id="l3b-architecture" name="L3B Multi-Agent Architecture">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Input -->
+        <mxCell id="input" value="Case input&#10;(claimed_order_id, candidates,&#10;customer_unique_id_hint, claims)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="600" y="20" width="240" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Coordinator -->
+        <mxCell id="coordinator" value="Coordinator" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="640" y="120" width="160" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Entity agent -->
+        <mxCell id="entity" value="Entity Agent&#10;(get_customer_history)&#10;resolve order, reject candidates" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="640" y="220" width="220" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Specialist row -->
+        <mxCell id="order" value="Order/Item Agent&#10;(get_order, get_order_items,&#10;get_product_context)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="240" y="360" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="shipment" value="Shipment Agent&#10;(get_shipment_summary)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="500" y="360" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="payment" value="Payment/Refund Agent&#10;(get_payment_timeline,&#10;get_refund_timeline)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="760" y="360" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="policy" value="Policy Agent&#10;(get_policy)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="360" width="220" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- MCP Gateway -->
+        <mxCell id="mcp" value="MCP Gateway&#10;(audit theo team + case_id,&#10;trả evidence_ref có schema)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="240" y="480" width="1000" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Conflict resolver -->
+        <mxCell id="conflict" value="Conflict Resolver&#10;tách timeline theo lần mua,&#10;chọn timeline đúng theo opened_at,&#10;ghi data_conflicts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="600" y="600" width="260" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Coordinator decides -->
+        <mxCell id="classify" value="Coordinator: phân tích shipment + payment&#10;→ suy ra primary_issue CHỈ từ evidence&#10;(không tin lời khai / claim)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="580" y="720" width="300" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Policy decide -->
+        <mxCell id="decide" value="Policy Agent: policy_decided&#10;→ case_status, action, refund_brl,&#10;responsible_parties" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="580" y="830" width="300" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Verifier -->
+        <mxCell id="verifier" value="Verifier&#10;9 kiểm tra bất biến: entity scope,&#10;evidence ownership, refund sum,&#10;consistency, delivery vs dates..." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="580" y="940" width="300" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Output -->
+        <mxCell id="output" value="Output JSON (l3b-output-v2 schema)&#10;+ trace.jsonl (observable events)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="600" y="1060" width="260" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="input" target="coordinator">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="task_assigned&#10;RESOLVE_ENTITY" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="coordinator" target="entity">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="handoff ENTITY_RESOLVED" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="entity" target="coordinator">
+          <mxGeometry x="-0.2" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="900" y="200" />
+              <mxPoint x="900" y="145" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="e4" value="task_assigned" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="coordinator" target="order">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="task_assigned" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="coordinator" target="shipment">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="task_assigned" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="coordinator" target="payment">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="task_assigned" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="coordinator" target="policy">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="order" target="mcp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="shipment" target="mcp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="payment" target="mcp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="policy" target="mcp">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11b" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="entity" target="mcp">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="750" y="510" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="e12" value="*_FACTS_READY handoff" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="mcp" target="conflict">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e13" value="TIMELINE_SELECTED handoff" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="conflict" target="classify">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" value="primary_issue, rule_code" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="classify" target="decide">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" value="REMEDY_DECIDED handoff" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="decide" target="verifier">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e16" value="READY_TO_FINALIZE" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="verifier" target="output">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend" value="Actor có quyền gọi MCP tool riêng (least privilege) — xem bảng &quot;Agent ownership&quot; trong ARCHITECTURE.md.&#10;Mọi mũi tên đều tương ứng 1 trace event (task_assigned / handoff / tool_result_consumed / policy_decided / verification_completed)." style="text;html=1;align=left;verticalAlign=top;fontSize=12;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="240" y="1150" width="1000" height="40" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
