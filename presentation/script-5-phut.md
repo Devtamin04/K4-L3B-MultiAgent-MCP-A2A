@@ -96,6 +96,30 @@ Nếu nói chậm thì bỏ bớt phần giải thích ở bước một và bư
 
 ---
 
+## Hướng dẫn chỉ tay trang 1 (theo diagram)
+
+Mắt người nghe đi theo hình chữ Z: trái sang giữa, sang phải, rồi xuống dưới. Chỉ tay đúng thứ tự
+này để lời nói luôn khớp với chỗ đang được nhìn.
+
+| # | Thời gian | Chỉ vào | Nói gì |
+| ---: | --- | --- | --- |
+| ① | 0:00 – 0:10 | Dòng phụ đề, cụm **"không dùng LLM"** | Hệ multi-agent viết bằng Python thuần, deterministic: cùng evidence thì cùng kết quả |
+| ② | 0:10 – 0:25 | Ô xanh dương "Case khiếu nại", **dừng ở dòng chữ đỏ ⚠** | Input gồm claims, mã đơn khai + ứng viên, opened_at; lời nhắn có thể chứa instruction giả ⇒ không tin lời khai |
+| ③ | 0:25 – 0:30 | Ô "CLI" → mũi tên `solve_case()` | CLI đọc 100 case, đưa từng case vào hệ thống |
+| ④ | 0:30 – 0:40 | Ô vàng "Coordinator" | Lập kế hoạch, giao việc, lắp kết quả, nhưng không có quyền gọi tool |
+| ⑤ | 0:40 – 0:55 | 5 ô xanh lá (lướt trái → phải), rồi **dòng 🔒** ở đáy khung | Đọc tên agent, không đọc tên tool; mỗi agent chỉ gọi tool của mình, gọi sai ⇒ lỗi ngay (least privilege) |
+| ⑥ | 0:55 – 1:05 | 2 ô tím | Conflict resolver xử lý nhiều lần mua / nguồn mâu thuẫn; Verifier kiểm 9 điều kiện trước khi xuất |
+| ⑦ | 1:05 – 1:10 | `tool call` → Evidence cache → MCP server | Mọi tool call qua cache rồi mới tới MCP server; rớt mạng chạy lại không gọi trùng |
+| ⑧ | 1:10 – 1:15 | Hàng xanh dương dưới cùng, dừng ở `submission.zip` | JSON kết luận, trace để kiểm toán, report giải thích; validate schema rồi đóng gói |
+| ⑨ | vài giây | Ô "4 nguyên tắc thiết kế" | Chốt 4 nguyên tắc, chuyển sang trang 2: "một case chạy qua hệ thống như thế nào" |
+
+- Bảng chú thích màu: không đọc, chỉ nói một câu lúc đầu: *"Vàng là điều phối, xanh lá có tool,
+  tím không có tool."*
+- Không giải thích nhãn `task_assigned / handoff` ở trang này, để dành cho trang 2.
+- Trình chiếu bằng drawio: bật **View → Presentation mode** hoặc zoom vào từng vùng theo thứ tự ① → ⑧.
+
+---
+
 ## Mẹo khi trình bày
 
 - Trang 3 là trang "ăn điểm" nhất: chỉ tay theo trục thời gian, dừng lại ở vạch đỏ "Case mở".
