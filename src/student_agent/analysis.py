@@ -215,9 +215,12 @@ def build_slices(
         )
         slices[target].shipment_events.append(event)
     for event in (refund_timeline or {}).get("events") or []:
+        # A refund reverses a specific capture: match by amount before falling back to time.
         amount = money(event.get("amount_brl"))
-        options = _candidates(ts(event.get("event_at")), slices)
-        target = _pick(options, lambda i, amount=amount: amount in slices[i].captures)
+        moment = ts(event.get("event_at"))
+        started = [i for i, s in enumerate(slices) if moment is None or s.purchase_at <= moment]
+        matching = [i for i in started if amount in slices[i].captures]
+        target = matching[-1] if matching else _candidates(moment, slices)[-1]
         slices[target].refund_events.append(event)
     return slices
 

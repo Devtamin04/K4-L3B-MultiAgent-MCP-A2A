@@ -851,7 +851,6 @@ async def solve_case(case: dict[str, Any], gateway: Any, trace: TraceWriter) -> 
         ),
         f"{decision.action}, {decision.refund:.2f} BRL",
     )
-
     output = build_output(ctx, entity, conflict, delivery, payment, decision)
     ctx.assign("verifier", "VERIFY_OUTPUT", "kiểm tra độc lập trước khi finalize")
     checks = verifier(ctx, output, conflict)

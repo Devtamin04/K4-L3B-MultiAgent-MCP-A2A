@@ -86,6 +86,40 @@ def test_same_day_purchases_are_split_by_record_position() -> None:
     assert issue == "valid_split_payment"
 
 
+def test_refund_attaches_to_the_capture_it_reverses() -> None:
+    history = [
+        row("2018-08-05", "delivered", "2018-08-07", "2018-08-14", "2018-08-15"),
+        row("2018-08-14", "delivered", "2018-08-16", "2018-08-23", "2018-08-24"),
+    ]
+    items = [item("2018-08-08"), item("2018-08-17")]
+    payments = timeline(capture("2018-08-05", "89.00"), capture("2018-08-14", "35.00"))
+    payments["events"].append(
+        {
+            "event_at": "2018-08-14T10:00:00-03:00",
+            "event_type": "reconciliation_mismatch",
+            "amount_brl": "35.00",
+            "status": "open",
+        }
+    )
+    refund = {
+        "events": [
+            {
+                "event_at": "2018-08-16T09:00:00-03:00",
+                "event_type": "refund_requested",
+                "amount_brl": "89.00",
+                "status": "pending",
+            }
+        ]
+    }
+    slices = build_slices(OID, history, history[0], items, payments, {"events": []}, refund)
+    index, _ = select_slice(slices, ts("2018-08-26T09:00:00-03:00"))
+    selected = slices[index]
+    assert selected.refund_events == []
+    delivery = analyse_delivery(selected, [])
+    payment = analyse_payment(selected, True)
+    assert classify_issue(selected, delivery, payment)[0] == "payment_mismatch"
+
+
 def test_late_delivery_responsibility_follows_carrier_handoff() -> None:
     history = [
         row("2018-05-02", "delivered", "2018-05-04", "2018-05-11", "2018-05-12"),
