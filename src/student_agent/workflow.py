@@ -11,6 +11,7 @@ from .analysis import (
     DELIVERY_TOPICS,
     PAYMENT_TOPICS,
     REFUND_TOPICS,
+    STATUS_TOPICS,
     DeliveryFinding,
     PaymentFinding,
     TimelineSlice,
@@ -31,7 +32,7 @@ REPORT_DIR: Path | None = None
 ACTOR_TOOLS: dict[str, frozenset[str]] = {
     "coordinator": frozenset(),
     "entity-agent": frozenset({"get_customer_history"}),
-    "order-agent": frozenset({"get_order", "get_order_items"}),
+    "order-agent": frozenset({"get_order", "get_order_items", "get_product_context"}),
     "shipment-agent": frozenset({"get_shipment_summary"}),
     "payment-agent": frozenset({"get_payment_timeline", "get_refund_timeline"}),
     "policy-agent": frozenset({"get_policy"}),
@@ -49,14 +50,15 @@ CLAIM_TOOLS = {
 }
 
 _BASE_SUPPORT = ("get_customer_history", "get_order", "get_policy")
+_ORDER_SUPPORT = (*_BASE_SUPPORT, "get_order_items", "get_product_context")
 SUPPORTING_TOOLS = {
     "late_delivery_seller": (*_BASE_SUPPORT, "get_order_items", "get_shipment_summary"),
     "late_delivery_logistics": (*_BASE_SUPPORT, "get_order_items", "get_shipment_summary"),
-    "canceled_order_paid": (*_BASE_SUPPORT, "get_order_items", "get_payment_timeline"),
-    "unavailable_order_paid": (*_BASE_SUPPORT, "get_order_items", "get_payment_timeline"),
-    "valid_split_payment": (*_BASE_SUPPORT, "get_order_items", "get_payment_timeline"),
-    "duplicate_charge": (*_BASE_SUPPORT, "get_order_items", "get_payment_timeline"),
-    "payment_mismatch": (*_BASE_SUPPORT, "get_payment_timeline"),
+    "canceled_order_paid": (*_ORDER_SUPPORT, "get_payment_timeline"),
+    "unavailable_order_paid": (*_ORDER_SUPPORT, "get_payment_timeline"),
+    "valid_split_payment": (*_ORDER_SUPPORT, "get_payment_timeline"),
+    "duplicate_charge": (*_ORDER_SUPPORT, "get_payment_timeline"),
+    "payment_mismatch": (*_BASE_SUPPORT, "get_product_context", "get_payment_timeline"),
     "refund_pending": (*_BASE_SUPPORT, "get_payment_timeline", "get_refund_timeline"),
     "refund_failed": (*_BASE_SUPPORT, "get_payment_timeline", "get_refund_timeline"),
 }
@@ -245,9 +247,9 @@ async def entity_agent(ctx: CaseContext) -> EntityResult:
     return EntityResult(status, resolved, rejected, confidence, customer, orders, history_ids)
 
 
-async def order_agent(ctx: CaseContext, order_id: str) -> None:
+async def order_agent(ctx: CaseContext, order_id: str, include_product: bool) -> None:
     actor = "order-agent"
-    await asyncio.gather(
+    calls = [
         ctx.call(
             actor, "get_order", "lấy order row để kiểm tra trạng thái/timeline", order_id=order_id
         ),
@@ -257,17 +259,27 @@ async def order_agent(ctx: CaseContext, order_id: str) -> None:
             "lấy item, seller, giá, freight, shipping limit",
             order_id=order_id,
         ),
-    )
+    ]
+    if include_product:
+        calls.append(
+            ctx.call(
+                actor,
+                "get_product_context",
+                "claim về đơn/thanh toán: xác nhận sản phẩm của đơn (scope product)",
+                order_id=order_id,
+            )
+        )
+    await asyncio.gather(*calls)
     ctx.handoff(
         A2AMessage(
             ctx.case_id,
             actor,
             "conflict-resolver",
             "ORDER_FACTS_READY",
-            ctx.refs(["get_order", "get_order_items"]),
+            ctx.refs(["get_order", "get_order_items", "get_product_context"]),
             {"item_rows": len(ctx.data("get_order_items", []) or [])},
         ),
-        "order row + items (product category không ảnh hưởng loại issue nào → không gọi)",
+        "order row + items" + (" + product context" if include_product else ""),
     )
 
 
@@ -416,7 +428,7 @@ class Decision:
 def claim_family(topic: str) -> str:
     if topic in DELIVERY_TOPICS:
         return "delivery"
-    if topic in {"canceled_order_paid", "unavailable_order_paid"}:
+    if topic in STATUS_TOPICS:
         return "status"
     if topic in PAYMENT_TOPICS:
         return "payment"
@@ -435,6 +447,7 @@ def policy_decide(
     delivery: DeliveryFinding | None,
     confidence: float,
 ) -> Decision:
+    """Remedy from the policy rule; a seller party is bound to the order's own (late) seller."""
     actor = "policy-agent"
     rules = ((ctx.data("get_policy") or {}).get("rules")) or {}
     rule = rules.get(issue)
@@ -549,11 +562,6 @@ def build_output(
         if decision.refund > CENT
         else []
     )
-    payment_refs = (
-        [f"{order_id}:{p.get('payment_sequential')}" for p in selected.payments]
-        if selected is not None and order_id
-        else []
-    )
     cited = supporting_refs(ctx, decision.issue)[:30]
     return {
         "schema_version": OUTPUT_SCHEMA_VERSION,
@@ -568,7 +576,7 @@ def build_output(
             "order_ids": order_ids[:20],
             "item_ids": (selected.item_ids if selected else [])[:20],
             "seller_ids": (selected.seller_ids if selected else [])[:20],
-            "payment_references": unique(payment_refs)[:20],
+            "payment_references": [],
             "shipment_ids": [],
         },
         "claim_assessments": _claim_assessments(ctx, decision, cited),
@@ -756,12 +764,17 @@ async def solve_case(case: dict[str, Any], gateway: Any, trace: TraceWriter) -> 
     entity = await entity_agent(ctx)
     order_id = entity.resolved[0] if entity.resolved else None
 
-    need_shipment = not any(t in PAYMENT_TOPICS | REFUND_TOPICS for t in topics)
+    need_shipment = not any(t in PAYMENT_TOPICS | REFUND_TOPICS | STATUS_TOPICS for t in topics)
     need_refunds = any(t in REFUND_TOPICS for t in topics)
+    need_product = any(t in PAYMENT_TOPICS | STATUS_TOPICS for t in topics)
     jobs = []
     if order_id:
-        ctx.assign("order-agent", "COLLECT_ORDER_FACTS", "order row, item/seller, product context")
-        jobs.append(order_agent(ctx, order_id))
+        ctx.assign(
+            "order-agent",
+            "COLLECT_ORDER_FACTS",
+            "order row, item/seller" + (", product context" if need_product else ""),
+        )
+        jobs.append(order_agent(ctx, order_id, need_product))
         if need_shipment:
             ctx.assign("shipment-agent", "COLLECT_SHIPMENT_FACTS", "claim cần kiểm chứng giao nhận")
             jobs.append(

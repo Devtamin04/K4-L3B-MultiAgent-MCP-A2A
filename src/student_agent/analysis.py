@@ -21,6 +21,7 @@ ISSUES = (
 PAYMENT_TOPICS = {"valid_split_payment", "payment_mismatch", "duplicate_charge"}
 REFUND_TOPICS = {"refund_pending", "refund_failed"}
 DELIVERY_TOPICS = {"late_delivery_seller", "late_delivery_logistics"}
+STATUS_TOPICS = {"canceled_order_paid", "unavailable_order_paid"}
 COMPLETED_REFUND_STATUSES = {"completed", "succeeded", "confirmed", "refunded", "settled"}
 CENT = 0.005
 
@@ -282,6 +283,9 @@ def analyse_delivery(s: TimelineSlice, shipping_limits: list[dict[str, Any]]) ->
     late_sellers = unique(
         seller for seller, limit in limits if carrier and limit and carrier > limit
     )
+    if s.status in {"canceled", "unavailable"}:
+        # Order never reached delivery: no delay is attributable to seller or carrier.
+        return DeliveryFinding("on_time", False, [], complete, False, carrier, delivered, estimated)
     if s.status != "delivered" or delivered is None or estimated is None:
         return DeliveryFinding(
             "insufficient_evidence", False, [], complete, False, carrier, delivered, estimated

@@ -14,6 +14,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from dotenv import dotenv_values
+
 from .mcp_gateway import EvidenceGateway
 
 NO_DATA_MARKER = "Error executing tool"
@@ -25,7 +27,9 @@ class ToolNoData(RuntimeError):
 
 
 def run_cache_dir(root: Path) -> Path | None:
-    expires = os.getenv("DAY09_RUN_EXPIRES_AT", "").strip()
+    # .env wins over a stale exported shell value: reusing another run's evidence scores 0.
+    from_file = dotenv_values(root / ".env").get("DAY09_RUN_EXPIRES_AT")
+    expires = (from_file or os.getenv("DAY09_RUN_EXPIRES_AT", "")).strip()
     if not expires:
         return None
     try:

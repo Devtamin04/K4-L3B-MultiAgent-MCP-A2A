@@ -6,6 +6,9 @@ import json
 import sys
 from pathlib import Path
 
+import httpx2
+from mcp.shared.exceptions import MCPError
+
 from . import workflow
 from .cases import load_case_set
 from .config import Settings
@@ -16,6 +19,9 @@ from .report import write_summary
 from .submission import package_submission, validate_artifacts
 from .trace import TraceWriter
 from .workflow import solve_case
+
+RECONNECT_ATTEMPTS = 3
+RECONNECT_BACKOFF_SECONDS = 10
 
 
 def _root(value: str) -> Path:
@@ -84,14 +90,40 @@ async def _run(root: Path, offline: bool) -> None:
         await _solve_all(root, CachedGateway(None, cache_dir), contracts)
         return
     settings = Settings.load(root)
-    async with connect_gateway(settings.mcp_endpoint, settings.team_api_key, contracts) as gateway:
-        discovered_tools = await gateway.list_tools()
-        if not discovered_tools:
-            raise RuntimeError("MCP Gateway returned no tools")
-        missing = set().union(*workflow.ACTOR_TOOLS.values()) - set(discovered_tools)
-        if missing:
-            raise RuntimeError(f"MCP Gateway does not expose required tools: {sorted(missing)}")
-        await _solve_all(root, CachedGateway(gateway, run_cache_dir(root)), contracts)
+    cache_dir = run_cache_dir(root)
+    for attempt in range(RECONNECT_ATTEMPTS + 1):
+        try:
+            async with connect_gateway(
+                settings.mcp_endpoint, settings.team_api_key, contracts
+            ) as gateway:
+                discovered_tools = await gateway.list_tools()
+                if not discovered_tools:
+                    raise RuntimeError("MCP Gateway returned no tools")
+                missing = set().union(*workflow.ACTOR_TOOLS.values()) - set(discovered_tools)
+                if missing:
+                    raise RuntimeError(
+                        f"MCP Gateway does not expose required tools: {sorted(missing)}"
+                    )
+                await _solve_all(root, CachedGateway(gateway, cache_dir), contracts)
+            return
+        except Exception as exc:
+            # Only a run-scoped cache makes a restart free of duplicate MCP calls.
+            if cache_dir is None or attempt == RECONNECT_ATTEMPTS or not _is_transport(exc):
+                raise
+            delay = RECONNECT_BACKOFF_SECONDS * (attempt + 1)
+            print(
+                f"MCP connection lost ({type(exc).__name__}); reconnecting in {delay}s "
+                "and resuming from cache",
+                flush=True,
+            )
+            await asyncio.sleep(delay)
+
+
+def _is_transport(exc: BaseException) -> bool:
+    """Transient gateway failures; tool-level errors (ToolNoData) never reach here."""
+    if isinstance(exc, BaseExceptionGroup):
+        return all(_is_transport(inner) for inner in exc.exceptions)
+    return isinstance(exc, httpx2.TransportError | OSError | TimeoutError | MCPError)
 
 
 def parser() -> argparse.ArgumentParser:
