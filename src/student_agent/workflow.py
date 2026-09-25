@@ -48,6 +48,27 @@ CLAIM_TOOLS = {
     "full_refund": ("get_payment_timeline", "get_refund_timeline", "get_policy"),
 }
 
+_BASE_SUPPORT = ("get_customer_history", "get_order", "get_policy")
+SUPPORTING_TOOLS = {
+    "late_delivery_seller": (*_BASE_SUPPORT, "get_order_items", "get_shipment_summary"),
+    "late_delivery_logistics": (*_BASE_SUPPORT, "get_order_items", "get_shipment_summary"),
+    "canceled_order_paid": (*_BASE_SUPPORT, "get_order_items", "get_payment_timeline"),
+    "unavailable_order_paid": (*_BASE_SUPPORT, "get_order_items", "get_payment_timeline"),
+    "valid_split_payment": (*_BASE_SUPPORT, "get_order_items", "get_payment_timeline"),
+    "duplicate_charge": (*_BASE_SUPPORT, "get_order_items", "get_payment_timeline"),
+    "payment_mismatch": (*_BASE_SUPPORT, "get_payment_timeline"),
+    "refund_pending": (*_BASE_SUPPORT, "get_payment_timeline", "get_refund_timeline"),
+    "refund_failed": (*_BASE_SUPPORT, "get_payment_timeline", "get_refund_timeline"),
+}
+
+
+def supporting_refs(ctx: CaseContext, issue: str) -> list[str]:
+    """Evidence that actually supports the conclusion; other consulted evidence is not cited."""
+    tools = SUPPORTING_TOOLS.get(issue)
+    if tools is None:
+        return unique(e.ref for e in ctx.evidence.values())
+    return ctx.refs(tools)
+
 
 @dataclass
 class Evidence:
@@ -474,20 +495,17 @@ def policy_decide(
 
 
 def _claim_assessments(
-    ctx: CaseContext, decision: Decision, payment: PaymentFinding | None
+    ctx: CaseContext, decision: Decision, cited: list[str]
 ) -> list[dict[str, Any]]:
     results = []
     for claim in ctx.case["customer_request"].get("claims") or []:
         topic = claim.get("topic", "")
         family = claim_family(topic)
-        refs = ctx.refs(CLAIM_TOOLS[family])
+        refs = [ref for ref in ctx.refs(CLAIM_TOOLS[family]) if ref in cited]
         if topic == "requested_full_refund":
-            captured = (payment.captured_total if payment else None) or 0.0
             if decision.refund <= CENT:
                 verdict = "unsupported"
-            elif decision.action == "refund_freight":
-                verdict = "partially_supported"
-            elif decision.refund + CENT >= captured:
+            elif decision.action == "issue_refund":
                 verdict = "supported"
             else:
                 verdict = "partially_supported"
@@ -536,6 +554,7 @@ def build_output(
         if selected is not None and order_id
         else []
     )
+    cited = supporting_refs(ctx, decision.issue)[:30]
     return {
         "schema_version": OUTPUT_SCHEMA_VERSION,
         "case_id": ctx.case_id,
@@ -552,7 +571,7 @@ def build_output(
             "payment_references": unique(payment_refs)[:20],
             "shipment_ids": [],
         },
-        "claim_assessments": _claim_assessments(ctx, decision, payment),
+        "claim_assessments": _claim_assessments(ctx, decision, cited),
         "entity_resolution": {
             "status": entity.status,
             "resolved_order_ids": entity.resolved[:20],
@@ -578,7 +597,7 @@ def build_output(
             "ranked_causes": [{"cause_code": decision.issue.upper(), "rank": 1}],
             "responsible_parties": decision.parties,
         },
-        "evidence_refs": unique(e.ref for e in ctx.evidence.values())[:30],
+        "evidence_refs": cited,
         "data_conflicts": conflict.conflicts[:5],
         "financial_resolution": {
             "currency": "BRL",
